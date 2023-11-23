@@ -63,24 +63,30 @@ def reference_loop_source(chain_length):
 # try 1,2,4,8, etc.
 def homework_loop_sequential_source(chain_length, unroll_factor):
     function = "void homework_loop_sequential(float *b, int size) {"
-    # loop header
-    loop =      f"  for (int i = 0; i < size; i += {unroll_factor}) {{"
     
-    ## TODO: THIS ENTIRE SECTION NEEDS TO BE UNROLLED
-    # read the original value from memory
-    init = "    float tmp = b[i];"
+    # Slide 12 https://sorensenucsc.github.io/CSE211-fa2023/lectures/CSE211Nov15_fa2023.pdf
+    loop =      f"  for (int i = 0; i < size; i += {unroll_factor}) {{"
+    init = []
+    unroll = []
+    for j in range(0, unroll_factor):
+        # read the original value from memory
+        init.append(f"    float tmp{j} = b[i + {str(j)}];")
 
-    # create the dependency chain
-    chain = []
-    for i in range(0,chain_length):
-        chain.append("    tmp += "+ str(i+1)+".0f;")
+        # create the dependency chain
+        chain = []
+        for k in range(0, chain_length):
+            chain.append(f"    tmp{j} += {str(k+1)}.0f;")
 
-    # store the final value to memory
-    close = "    b[i] = tmp;"
-    ## END UNROLLED SECTION
+        # store the final value to memory
+        close = f"    b[i + {str(j)}] = tmp{j};"
 
+        # construct the unrolled loop
+        unroll.append("\n".join(chain))
+        unroll.append(close)
+
+    # format for printing
     loop_close = "}"
-    function_body =  "\n".join([loop, init, "\n".join(chain), loop_close])
+    function_body =  "\n".join([loop, "\n".join(init), "\n".join(unroll), loop_close])
     function_close = "}"
     return "\n".join([function, function_body, function_close])
 
@@ -93,33 +99,37 @@ def homework_loop_sequential_source(chain_length, unroll_factor):
 # the dependency chain also a power of two. 
 def homework_loop_interleaved_source(chain_length, unroll_factor):
     function = "void homework_loop_interleaved(float *b, int size) {"
-    loop =      f"  for (int i = 0; i < size; i += {unroll_factor}) {{"
+
     # Slide 13 https://sorensenucsc.github.io/CSE211-fa2023/lectures/CSE211Nov15_fa2023.pdf
-    ## Example of unroll factor of 3
+    loop =      f"  for (int i = 0; i < size; i += {unroll_factor}) {{"
+    init = []
+    unroll = []
+    chain = []
+    close = []
+    
+    # read the original value from memory
+    for j in range(0, unroll_factor):
+        init.append(f"    float tmp{j} = b[i + {str(j)}];")
 
-    ## Assignment for vars
-    # "    float tmp0 = b[i];"
-    # "    float tmp1 = b[i+1];"
-    # "    float tmp2 = b[i+2];"
-    # ....
+    # create the dependency chain
+    for k in range(0, chain_length):
+        for l in range(0, unroll_factor):
+            chain.append(f"    tmp{l} += {str(k+1)}.0f;")
 
-    ## Chain:
-    # tmp0 += 1.0f
-    # tmp1 += 1.0f
-    # tmp2 += 1.0f
-    # tmp0 += 2.0f
-    # tmp1 += 2.0f
-    # tmp2 += 2.0f
+    # store the final value to memory
+    for l in range(0, unroll_factor):
+        close.append(f"    b[i + {str(l)}] = tmp{l};")
 
-    ## Assign:
-    # b[i] = tmp0
-    # b[i+1] = tmp1
-    # b[i+2] = tmp2
+    # construct the unrolled loop
+    unroll.append("\n".join(chain))
+    unroll.append("\n".join(close))
 
+    # format for printing
     loop_close = "}"
-    function_body =  "\n".join([loop, init, "\n".join(chain), loop_close])
+    function_body =  "\n".join([loop, "\n".join(init), "\n".join(unroll), loop_close])
     function_close = "}"
     return "\n".join([function, function_body, function_close])
+
 
 # String for the main function
 main_source_string = """

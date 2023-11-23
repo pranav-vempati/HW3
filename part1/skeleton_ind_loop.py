@@ -42,7 +42,7 @@ def reference_loop_source(chain_length):
     # join together all the parts to make a complete function
     return "\n".join([function, loop, init, "\n".join(chain), close, loop_close, function_close])
 
-# First hoomework function here! Implement the reference loop unrolled
+# First homework function here! Implement the reference loop unrolled
 # *sequentially*, That is, create dependency chains of length
 # *chain_length*. Unroll the loop by a factor of *unroll_factor*. Do
 # the unrolled loop iterations sequentially: i.e. do not start the
@@ -63,8 +63,24 @@ def reference_loop_source(chain_length):
 # try 1,2,4,8, etc.
 def homework_loop_sequential_source(chain_length, unroll_factor):
     function = "void homework_loop_sequential(float *b, int size) {"
-    #implement me!
-    function_body = ""
+    # loop header
+    loop =      f"  for (int i = 0; i < size; i += {unroll_factor}) {{"
+    
+    ## TODO: THIS ENTIRE SECTION NEEDS TO BE UNROLLED
+    # read the original value from memory
+    init = "    float tmp = b[i];"
+
+    # create the dependency chain
+    chain = []
+    for i in range(0,chain_length):
+        chain.append("    tmp += "+ str(i+1)+".0f;")
+
+    # store the final value to memory
+    close = "    b[i] = tmp;"
+    ## END UNROLLED SECTION
+
+    loop_close = "}"
+    function_body =  "\n".join([loop, init, "\n".join(chain), loop_close])
     function_close = "}"
     return "\n".join([function, function_body, function_close])
 
@@ -77,8 +93,31 @@ def homework_loop_sequential_source(chain_length, unroll_factor):
 # the dependency chain also a power of two. 
 def homework_loop_interleaved_source(chain_length, unroll_factor):
     function = "void homework_loop_interleaved(float *b, int size) {"
-    #implement me!
-    function_body = ""    
+    loop =      f"  for (int i = 0; i < size; i += {unroll_factor}) {{"
+    # Slide 13 https://sorensenucsc.github.io/CSE211-fa2023/lectures/CSE211Nov15_fa2023.pdf
+    ## Example of unroll factor of 3
+
+    ## Assignment for vars
+    # "    float tmp0 = b[i];"
+    # "    float tmp1 = b[i+1];"
+    # "    float tmp2 = b[i+2];"
+    # ....
+
+    ## Chain:
+    # tmp0 += 1.0f
+    # tmp1 += 1.0f
+    # tmp2 += 1.0f
+    # tmp0 += 2.0f
+    # tmp1 += 2.0f
+    # tmp2 += 2.0f
+
+    ## Assign:
+    # b[i] = tmp0
+    # b[i+1] = tmp1
+    # b[i+2] = tmp2
+
+    loop_close = "}"
+    function_body =  "\n".join([loop, init, "\n".join(chain), loop_close])
     function_close = "}"
     return "\n".join([function, function_body, function_close])
 

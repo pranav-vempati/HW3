@@ -50,7 +50,9 @@ def homework_reduction_source(partitions):
     # header
     function = "void homework_reduction(reduce_type *a, int size) {"
 
-    # implement me!
+    # loop =      f"  for (int i = 1; i < size/{unroll_factor}; i++) {{"
+    # a[0] = REDUCE(a[0], a[i]);
+    # a[SIZE/2] = REDUCE(a[SIZE/2], a[(SIZE/2)+i]);
     function_body = ""
 
     # closing brace

@@ -47,13 +47,30 @@ def reference_reduction_source():
 # several power-of-2 unroll factors, e.g. 2,4,8,16. You can assume
 # partition is less than size.
 def homework_reduction_source(partitions):
+    init =  []
+    unroll = []
+    reduce = []
+    close = []
+
     # header
     function = "void homework_reduction(reduce_type *a, int size) {"
+    init = f"  int partition_idx = size/{partitions};"
 
-    # loop =      f"  for (int i = 1; i < size/{unroll_factor}; i++) {{"
-    # a[0] = REDUCE(a[0], a[i]);
-    # a[SIZE/2] = REDUCE(a[SIZE/2], a[(SIZE/2)+i]);
-    function_body = ""
+    # unroll
+    loop = f"  for (int i = 1; i < size/{partitions}; i++) {{"
+    for j in range(0, partitions):
+        idx =         f"partition_idx * {j}"
+        unroll.append(f"   a[{idx}] += a[{idx} + i];")
+    loop_close = "  }"
+
+    # reduce
+    if partitions > 1:
+        reduce.append("   a[0]")
+        for j in range(1, partitions):
+            idx = f"partition_idx * {j}"
+            reduce.append(f"+=a[{idx}]") if j == 1 else reduce.append(f"+a[{idx}]")
+        reduce.append(";")
+    function_body = "\n".join([init, loop, "\n".join(unroll), loop_close, "".join(reduce)])
 
     # closing brace
     function_close = "}"

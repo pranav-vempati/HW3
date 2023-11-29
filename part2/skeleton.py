@@ -1,6 +1,7 @@
 import ast
 import argparse
 import z3
+import collections
 
 class LoopConstraint():
     def __init__(self, FOR_node):
@@ -44,23 +45,57 @@ class ForLoopVisitor(ast.NodeVisitor):
         self.assignment_expression.append(ast.unparse(node.slice))
         self.generic_visit(node)
 
-# Helper function to convert expressions -> Z3
-def parse_expr(node, z3_vars):
-    if isinstance(node, ast.Num): 
-        return z3.IntVal(node.n)
-    elif isinstance(node, ast.Name):
-        return z3_vars[node.id]
-    elif isinstance(node, ast.BinOp):
-        left = parse_expr(node.left, z3_vars)
-        right = parse_expr(node.right, z3_vars)
-        if isinstance(node.op, ast.Add):
-            return left + right
-        elif isinstance(node.op, ast.Sub):
-            return left - right
-        elif isinstance(node.op, ast.Mult):
-            return left * right
-    else:
-        raise Exception(f"Unhandled expression type: {type(node)}")
+class Z3Thread():
+    def __init__(self, visitor, thread_id):
+        self.thread_id = thread_id
+        self.visitor = visitor
+        self.z3_vars = collections.OrderedDict()
+        for loop in visitor.loops:
+            self.z3_vars[loop.var] = z3.Int(f'{loop.var}_{thread_id}')
+    
+    def outer_loop_var(self):
+        return list(self.z3_vars.values())[0]
+
+    def add_all_loop_constraints(self, solver):
+        for loop in self.visitor.loops:
+            loop_var = self.z3_vars[loop.var]
+            solver.add(loop_var >= self._calculate_lower_bound(loop), loop_var < self._calculate_upper_bound(loop))
+    
+    def write_index(self):
+        """Translate write index into Z3 expressions"""
+        return self._parse_expr(ast.parse(self.visitor.assignment_expression.write_index).body[0].value, self.z3_vars)
+    
+    def read_index(self):
+        """Translate read index into Z3 expressions"""
+        return self._parse_expr(ast.parse(self.visitor.assignment_expression.read_index).body[0].value, self.z3_vars)
+    
+    def _calculate_lower_bound(self, loop):
+        return self._parse_expr(ast.parse(loop.lower).body[0].value, self.z3_vars)
+    
+    def _calculate_upper_bound(self, loop):
+        return self._parse_expr(ast.parse(loop.upper).body[0].value, self.z3_vars)
+
+    # Helper function to convert expressions -> Z3
+    def _parse_expr(self, node, z3_vars):
+        if isinstance(node, ast.Num): 
+            return z3.IntVal(node.n)
+        elif isinstance(node, ast.Name):
+            return z3_vars[node.id]
+        elif isinstance(node, ast.BinOp):
+            left = self._parse_expr(node.left, z3_vars)
+            right = self._parse_expr(node.right, z3_vars)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            elif isinstance(node.op, ast.Sub):
+                return left - right
+            elif isinstance(node.op, ast.Mult):
+                return left * right
+            elif isinstance(node.op, ast.Div):
+                return left / right
+            elif isinstance(node.op, ast.Mod):
+                return left % right
+        else:
+            raise Exception(f"Unhandled expression type: {type(node)}")
 
 # Given a python file, return an AST using the python ast module.
 def get_ast_from_file(fname):
@@ -71,10 +106,6 @@ def get_ast_from_file(fname):
     body_ast = module_ast.body[0]    
     return body_ast
 
-# Check if an ast node is a for loop
-def is_FOR_node(node):
-    return str(node.__class__) == "<class '_ast.For'>"
-
 # Top level function. Given a python file name, it parses the file,
 # and analyzes it to determine if the top level for loop can be done
 # in parallel.
@@ -82,35 +113,29 @@ def analyze_file(fname):
     ast_tree = get_ast_from_file(fname)
     visitor = ForLoopVisitor()
     visitor.visit(ast_tree)
+    #print(visitor)
     
     solver = z3.Solver()
-    z3_vars = {}
-    
+
     # Create Z3 variables for loop constraints
-    for loop in visitor.loops:
-        loop_var = z3.Int(loop.var)
-        z3_vars[loop.var] = loop_var
-        lower_bound = parse_expr(ast.parse(loop.lower).body[0].value, z3_vars)
-        upper_bound = parse_expr(ast.parse(loop.upper).body[0].value, z3_vars)
-        solver.add(loop_var >= lower_bound, loop_var < upper_bound)
+    (thread1, thread2) = [Z3Thread(visitor, 0), Z3Thread(visitor, 1)]
 
     # Distinct constraint for outermost loop variable to allow parallelization of outer loop(enforce distinctness of outer loop indices)
-    outermost_loop_vars = [z3_vars[loop.var] for loop in visitor.loops[:1]]
-    solver.add(z3.Distinct(outermost_loop_vars))
+    solver.add(thread1.outer_loop_var() != thread2.outer_loop_var())
 
-    # Translate assignment expressions into Z3 expressions
-    write_index = parse_expr(ast.parse(visitor.assignment_expression.write_index).body[0].value, z3_vars)
-    read_index = parse_expr(ast.parse(visitor.assignment_expression.read_index).body[0].value, z3_vars)
+    # Distinct constraint for outermost loop variable to allow parallelization of outer loop(enforce distinctness of outer loop indices)
+    thread1.add_all_loop_constraints(solver)
+    thread2.add_all_loop_constraints(solver)
 
     # Check for write-write conflicts. If the constraints are satisfied, we have a conflict
     solver.push()
-    solver.add(write_index == write_index)
+    solver.add(thread1.write_index() == thread2.write_index())
     ww_conflict = solver.check() == z3.sat
     solver.pop()
 
     # Check for read-write conflicts. If the constraints are satisfied, we have a conflict. 
     solver.push()
-    solver.add(write_index == read_index)
+    solver.add(thread1.write_index() == thread2.read_index())
     rw_conflict = solver.check() == z3.sat
     solver.pop()
     
@@ -120,7 +145,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('pythonfile', help='The python file to be analyzed')
     args = parser.parse_args()
-    # ww_conflict, rw_conflict = analyze_file(f"/Users/tjbanghart/HW3/part2/test_cases/6.py")
+    # ww_conflict, rw_conflict = analyze_file(f"/Users/tjbanghart/HW3/part2/test_cases/2.py")
     ww_conflict, rw_conflict = analyze_file(args.pythonfile)
     print("Does the code have a write-write conflict? ", ww_conflict)
     print("Does the code have a read-write conflict? ", rw_conflict)

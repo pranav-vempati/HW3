@@ -11,7 +11,7 @@ class LoopConstraint():
     def __str__(self):
         return f"for {self.var} in range({self.lower}, {self.upper})"
 
-class AssignmentExpression(list):
+class AssignmentExpression():
     def __init__(self):
         self.write_index = None
         self.read_index = None
@@ -44,6 +44,24 @@ class ForLoopVisitor(ast.NodeVisitor):
         self.assignment_expression.append(ast.unparse(node.slice))
         self.generic_visit(node)
 
+# Helper function to convert expressions -> Z3
+def parse_expr(node, z3_vars):
+    if isinstance(node, ast.Num): 
+        return z3.IntVal(node.n)
+    elif isinstance(node, ast.Name):
+        return z3_vars[node.id]
+    elif isinstance(node, ast.BinOp):
+        left = parse_expr(node.left, z3_vars)
+        right = parse_expr(node.right, z3_vars)
+        if isinstance(node.op, ast.Add):
+            return left + right
+        elif isinstance(node.op, ast.Sub):
+            return left - right
+        elif isinstance(node.op, ast.Mult):
+            return left * right
+    else:
+        raise Exception(f"Unhandled expression type: {type(node)}")
+
 # Given a python file, return an AST using the python ast module.
 def get_ast_from_file(fname):
     f = open(fname, 'r')
@@ -60,34 +78,49 @@ def is_FOR_node(node):
 # Top level function. Given a python file name, it parses the file,
 # and analyzes it to determine if the top level for loop can be done
 # in parallel.
-#
-# It returns True if it is safe to do the top loop in parallel,
-# otherwise it returns False.
 def analyze_file(fname):
-    ast = get_ast_from_file(fname)
-
-    # Suggested steps:
-    # 1. Get loop constraints (variables and bounds)
-    # 2. Get expressions for read_index and write_index
+    ast_tree = get_ast_from_file(fname)
     visitor = ForLoopVisitor()
-    visitor.visit(ast)
-    print(visitor)
+    visitor.visit(ast_tree)
     
-    # 3. Create constraints and check them
-    # TODO: Use Z3 to create and solve constraints
+    solver = z3.Solver()
+    z3_vars = {}
+    
+    # Create Z3 variables for loop constraints
+    for loop in visitor.loops:
+        loop_var = z3.Int(loop.var)
+        z3_vars[loop.var] = loop_var
+        lower_bound = parse_expr(ast.parse(loop.lower).body[0].value, z3_vars)
+        upper_bound = parse_expr(ast.parse(loop.upper).body[0].value, z3_vars)
+        solver.add(loop_var >= lower_bound, loop_var < upper_bound)
 
-    # Set these variables to True if there is a write-write (ww)
-    # conflict or a read-write (rw) conflict
-    ww_conflict = False
-    rw_conflict = False
+    # Distinct constraint for outermost loop variable to allow parallelization of outer loop(enforce distinctness of outer loop indices)
+    outermost_loop_vars = [z3_vars[loop.var] for loop in visitor.loops[:1]]
+    solver.add(z3.Distinct(outermost_loop_vars))
+
+    # Translate assignment expressions into Z3 expressions
+    write_index = parse_expr(ast.parse(visitor.assignment_expression.write_index).body[0].value, z3_vars)
+    read_index = parse_expr(ast.parse(visitor.assignment_expression.read_index).body[0].value, z3_vars)
+
+    # Check for write-write conflicts. If the constraints are satisfied, we have a conflict
+    solver.push()
+    solver.add(write_index == write_index)
+    ww_conflict = solver.check() == z3.sat
+    solver.pop()
+
+    # Check for read-write conflicts. If the constraints are satisfied, we have a conflict. 
+    solver.push()
+    solver.add(write_index == read_index)
+    rw_conflict = solver.check() == z3.sat
+    solver.pop()
     
     return ww_conflict, rw_conflict
-    
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()   
-    parser.add_argument('pythonfile', help ='The python file to be analyzed') 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('pythonfile', help='The python file to be analyzed')
     args = parser.parse_args()
     # ww_conflict, rw_conflict = analyze_file(f"/Users/tjbanghart/HW3/part2/test_cases/6.py")
     ww_conflict, rw_conflict = analyze_file(args.pythonfile)
     print("Does the code have a write-write conflict? ", ww_conflict)
-    print("Does the code have a read-write conflict?  ", rw_conflict)
+    print("Does the code have a read-write conflict? ", rw_conflict)

@@ -44,7 +44,6 @@ class ForLoopVisitor(ast.NodeVisitor):
         self.assignment_expression.append(ast.unparse(node.slice))
         self.generic_visit(node)
 
-
 # Helper function to convert expressions -> Z3
 def parse_expr(node, z3_vars):
     if isinstance(node, ast.Num): 
@@ -63,8 +62,6 @@ def parse_expr(node, z3_vars):
     else:
         raise Exception(f"Unhandled expression type: {type(node)}")
 
-
-
 # Given a python file, return an AST using the python ast module.
 def get_ast_from_file(fname):
     f = open(fname, 'r')
@@ -73,7 +70,6 @@ def get_ast_from_file(fname):
     module_ast = ast.parse(s)
     body_ast = module_ast.body[0]    
     return body_ast
-
 
 # Check if an ast node is a for loop
 def is_FOR_node(node):
@@ -120,11 +116,11 @@ def analyze_file(fname):
     
     return ww_conflict, rw_conflict
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('pythonfile', help='The python file to be analyzed')
     args = parser.parse_args()
+    # ww_conflict, rw_conflict = analyze_file(f"/Users/tjbanghart/HW3/part2/test_cases/6.py")
     ww_conflict, rw_conflict = analyze_file(args.pythonfile)
     print("Does the code have a write-write conflict? ", ww_conflict)
     print("Does the code have a read-write conflict? ", rw_conflict)

@@ -131,12 +131,23 @@ def analyze_file(fname):
     solver.push()
     solver.add(thread1.write_index() == thread2.write_index())
     ww_conflict = solver.check() == z3.sat
+    # if ww_conflict:
+    #     print("----WW----")
+    #     model = solver.model()
+    #     for dec in model.decls():
+    #         print(f"{dec.name()}={model[dec]}")
     solver.pop()
 
     # Check for read-write conflicts. If the constraints are satisfied, we have a conflict. 
     solver.push()
     solver.add(thread1.write_index() == thread2.read_index())
     rw_conflict = solver.check() == z3.sat
+    # if rw_conflict:
+    #     print("----RW----")
+    #     model = solver.model()
+    #     for dec in model.decls():
+    #         print(f"{dec.name()}={model[dec]}")
+    # print("----------------------------------")
     solver.pop()
     
     return ww_conflict, rw_conflict

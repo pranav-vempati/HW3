@@ -47,34 +47,38 @@ def reference_reduction_source():
 # several power-of-2 unroll factors, e.g. 2,4,8,16. You can assume
 # partition is less than size.
 def homework_reduction_source(partitions):
+    # string arrays to print later
     init =  []
     unroll = []
     reduce = []
-    close = []
 
     # header
     function = "void homework_reduction(reduce_type *a, int size) {"
     init = f"  int partition_idx = size/{partitions};"
 
-    # unroll
+    # unroll based on number of partition
     loop = f"  for (int i = 1; i < size/{partitions}; i++) {{"
     for j in range(0, partitions):
+        # find the partition offset
         idx =f"partition_idx * {j}"
+        # reduce from the base offset + i
         unroll.append(f"   a[{idx}] += a[{idx} + i];")
     loop_close = "  }"
 
-    # reduce
+    # sum all partitions into a final total
+    # we only need to do this when there is more than one partition
     if partitions > 1:
         reduce.append("   a[0]")
         for j in range(1, partitions):
             idx = f"partition_idx * {j}"
+            # the first partition uses `+=`, the rest can be `+` together
             reduce.append(f"+=a[{idx}]") if j == 1 else reduce.append(f"+a[{idx}]")
         reduce.append(";")
-    function_body = "\n".join([init, loop, "\n".join(unroll), loop_close, "".join(reduce)])
 
-    # closing brace
+    # format the above for printing
+    function_body = "\n".join([init, loop, "\n".join(unroll), loop_close, "".join(reduce)])
     function_close = "}"
-    return "\n".join([function, function_body,function_close])
+    return "\n".join([function, function_body, function_close])
 
 # String for the main function, including timings and
 # reference checks.

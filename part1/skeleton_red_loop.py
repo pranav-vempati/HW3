@@ -59,7 +59,7 @@ def homework_reduction_source(partitions):
     # unroll
     loop = f"  for (int i = 1; i < size/{partitions}; i++) {{"
     for j in range(0, partitions):
-        idx =         f"partition_idx * {j}"
+        idx =f"partition_idx * {j}"
         unroll.append(f"   a[{idx}] += a[{idx} + i];")
     loop_close = "  }"
 

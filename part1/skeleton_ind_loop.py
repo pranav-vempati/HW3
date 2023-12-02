@@ -102,32 +102,27 @@ def homework_loop_interleaved_source(chain_length, unroll_factor):
 
     # Slide 13 https://sorensenucsc.github.io/CSE211-fa2023/lectures/CSE211Nov15_fa2023.pdf
     loop =      f"  for (int i = 0; i < size; i += {unroll_factor}) {{"
-    init = []
+
+    # read the original value from memory
+    init = [f"    float tmp{j} = b[i + {str(j)}];" for j in range(0, unroll_factor)]
+
+    # create the dependency chain for each unrolled index
     unroll = []
     chain = []
-    close = []
-    
-    # read the original value from memory
-    for j in range(0, unroll_factor):
-        init.append(f"    float tmp{j} = b[i + {str(j)}];")
-
-    # create the dependency chain
     for k in range(0, chain_length):
         for l in range(0, unroll_factor):
             chain.append(f"    tmp{l} += {str(k+1)}.0f;")
 
-    # store the final value to memory
-    for l in range(0, unroll_factor):
-        close.append(f"    b[i + {str(l)}] = tmp{l};")
-
-    # construct the unrolled loop
-    unroll.append("\n".join(chain))
-    unroll.append("\n".join(close))
+    # store the value to memory for the unrolled index
+    close = [f"    b[i + {str(l)}] = tmp{l};" for l in range(0, unroll_factor)]
 
     # format for printing
+    unroll.append("\n".join(chain))
+    unroll.append("\n".join(close))
     loop_close = "}"
     function_body =  "\n".join([loop, "\n".join(init), "\n".join(unroll), loop_close])
     function_close = "}"
+
     return "\n".join([function, function_body, function_close])
 
 

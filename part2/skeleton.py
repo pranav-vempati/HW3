@@ -90,7 +90,7 @@ class Z3Thread():
                 return left - right
             elif isinstance(node.op, ast.Mult):
                 return left * right
-            elif isinstance(node.op, ast.Div):
+            elif isinstance(node.op, ast.Div) or isinstance(node.op, ast.FloorDiv):
                 return left / right
             elif isinstance(node.op, ast.Mod):
                 return left % right
@@ -123,7 +123,7 @@ def analyze_file(fname):
     # Distinct constraint for outermost loop variable to allow parallelization of outer loop(enforce distinctness of outer loop indices)
     solver.add(thread1.outer_loop_var() != thread2.outer_loop_var())
 
-    # Distinct constraint for outermost loop variable to allow parallelization of outer loop(enforce distinctness of outer loop indices)
+    # Add bound constraints for all loops
     thread1.add_all_loop_constraints(solver)
     thread2.add_all_loop_constraints(solver)
 
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('pythonfile', help='The python file to be analyzed')
     args = parser.parse_args()
-    # ww_conflict, rw_conflict = analyze_file(f"/Users/tjbanghart/HW3/part2/test_cases/2.py")
+    # ww_conflict, rw_conflict = analyze_file(f"/Users/tjbanghart/HW3/part2/test_cases/tbanghar_5.py")
     ww_conflict, rw_conflict = analyze_file(args.pythonfile)
     print("Does the code have a write-write conflict? ", ww_conflict)
     print("Does the code have a read-write conflict? ", rw_conflict)

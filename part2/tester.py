@@ -12,7 +12,10 @@ tests = {"0.py" : (False, True),
          "pvempati_0.py" : (True, False),
          "pvempati_1.py" : (False, True),
          "pvempati_2.py" : (False, False),
-
+         "tbanghar_3.py": (True, True),
+         "tbanghar_4.py": (True, True),
+         "tbanghar_5.py": (True, False),
+         "pvempati_6.py": (False, False)
 }
 
 passed = 0
